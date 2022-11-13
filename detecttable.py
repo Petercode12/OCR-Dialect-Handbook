@@ -8,6 +8,7 @@ from collections import defaultdict
 import pytesseract
 from PIL import ImageFont, ImageDraw, Image, ImageEnhance
 import math
+import re
 pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
 
 class Line():
@@ -204,6 +205,8 @@ def getTable(src_img, y_start=0, min_w=3, min_h=3):
     #cv2.imwrite('a.jpg', src_img)
     return table#mask_img, joints_img
 
+# code minh tu day tro di nha
+
 def getTextOfBox(img):
     return pytesseract.image_to_string(img, config='-l vie+en --oem 1 --psm 6').strip()#.lower()
 
@@ -380,11 +383,11 @@ def rotate_img(image, vline): # rotate image based on vertical line
     img_center = (cols / 2, rows / 2)
     print("x1, y1, x2, y2: ", x1, y1, x2, y2)
     print("goc tao thanh voi truc oy: ", np.rad2deg(np.arctan((x1-x2)/(y1-y2))))
-    print("goc tao thanh voi truc ox: ", np.rad2deg(np.arctan((y2-y1)/(x2-x1))))
+    # print("goc tao thanh voi truc ox: ", np.rad2deg(np.arctan((y2-y1)/(x2-x1))))
     rotate_matrix = cv2.getRotationMatrix2D(center= img_center, angle= -np.rad2deg(np.arctan((x1-x2)/(y1-y2))), scale=1)
     rotated_image = cv2.warpAffine(src=image, M=rotate_matrix, dsize=(cols, rows), 
                                    borderMode=cv2.BORDER_CONSTANT,borderValue=(255,255,255))
-    cv2.imwrite('./output/image_output/tuan4/rotated_img' + str(i) + '.jpg', rotated_image)
+    # cv2.imwrite('./output/image_output/tuan4/rotated_img' + str(i) + '.jpg', rotated_image)
     # cv2.imshow("rotated_image: ", rotated_image)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
@@ -392,8 +395,8 @@ def rotate_img(image, vline): # rotate image based on vertical line
 
 def get_none_table_image(table_image, cells): #get the image with no table
     if cells == []: 
-        cv2.imwrite('./output/image_output/tuan4/non_table_image' + str(i) + '.jpg', table_image)
-        return table_image
+        cv2.imwrite('./output/image_output/non_table/non_table_image' + str(i) + '.jpg', table_image)
+        return table_image, 0, 0
     #print("first line: ", cells[0][1], "; last line: ",  cells[-1][3])
     
     top = cells[0][1]
@@ -405,23 +408,25 @@ def get_none_table_image(table_image, cells): #get the image with no table
     # cv2.imshow("none_table_image: ", table_image)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-    return table_image
+    return table_image, top, bottom
 
-def OCR_all_image(image):  #OCR on non table image
-    outputDir = 'output/image_output/tuan4/'
+def OCR_all_image(image, i):  #OCR on non table image
+    # outputDir = 'output/image_output/non_table/'
     text = getTextOfBox(image)
-    print(text)
-    imgPath = 'none_table_result' + str(i) + '.jpg'
-    with open(outputDir + imgPath[imgPath.rfind('/') + 1:-3] + 'txt', 'w', encoding='utf-8') as f:
-        f.write(text)
+    # print(text)
+    # imgPath = 'non_table_result' + str(i) + '.jpg'
+    # with open(outputDir + imgPath[imgPath.rfind('/') + 1:-3] + 'txt', 'a', encoding='utf-8') as f:
+    #     f.write(text)
+    return text
 
 inputDir = 'input/'
-outputDir = 'output/'
+outputDir = 'output/image_output/tuan4/'
 
 
 
-for i in range(20,27):
+for i in range(1,2):
     ############### code tuan 3 #################3
+    print("Image ", i)
     table_image  = cv2.imread('./input/crop_page'+ str(i) +'.jpg') # get image
     
     if get_vertical_line(table_image) is not None: # check if there are vertical line then rotate using the first one
@@ -430,6 +435,7 @@ for i in range(20,27):
     table_image_clone = table_image
        
     table_image = preprocess(table_image, 2)
+    
     gray = cv2.cvtColor(table_image, cv2.COLOR_BGR2GRAY)
     
     thresh,img_bin = cv2.threshold(gray,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
@@ -469,39 +475,68 @@ for i in range(20,27):
                 
     cells = []
     j = 0
-    
-    for point in points: # loop in points to find cells
-        j = j + 1
+    imgPath = 'non_table_result' + str(i) + '.jpg'
+    table_ocr_result = ""
+    with open(outputDir + imgPath[imgPath.rfind('/') + 1:-3] + 'txt', 'w', encoding='utf-8') as f:
         
-        left, top = point
-        right_points = sorted(
-            [p for p in points if p[0] > left and p[1] == top], key=lambda x: x[0])
-        bottom_points = sorted(
-            [p for p in points if p[1] > top and p[0] == left], key=lambda x: x[1])
-
-        right, bottom = get_bottom_right(right_points, bottom_points, points)
-        if right and bottom:
-            cells.append([left, top, right, bottom]) # left, top, right, bottom lan luot la x1, y1, x2, y2
-           
-            if top + 7 > bottom -2 or left+7 > right -1:
-                print("loi")
-                continue
+        for point in points: # loop in points to find cells
             
-            crop = table_image_bin[top+7:bottom-2, left+7:right-1]
-            # cv2.imwrite('./output/image_output/tuan3/'+str(j)+".jpg",crop)
-            cell_text = getTextOfBox(crop)
-            # print("cell text: " , cell_text)
-            cv2.rectangle(table_image_clone, (left, top), (right, bottom), (0, 0, 255), 2) # draw rectangle
-            cv2.rectangle(table_image_clone, (left+1, top+1), (right-1, bottom-1), (0,255,255), -1) # fill in the rectangle yellow collor
-            
-            
-            if cell_text != "":
-                table_image_clone = putTextUTF8(table_image_clone, cell_text, (left+3, top+5), 30) # put text inside the rectangle
                 
-    print("so luong cell: ", len(cells))
-    none_table_image = get_none_table_image(table_image_bin, cells)
-    OCR_all_image(none_table_image) # get result of nontable
-    cv2.imwrite('./output/image_output/tuan3/result_tuan3_page' + str(i) + '.jpg', table_image_clone) # save image
+            j = j + 1
+            
+            left, top = point
+            right_points = sorted(
+                [p for p in points if p[0] > left and p[1] == top], key=lambda x: x[0])
+            bottom_points = sorted(
+                [p for p in points if p[1] > top and p[0] == left], key=lambda x: x[1])
+
+            right, bottom = get_bottom_right(right_points, bottom_points, points)
+            if right and bottom:
+                
+                if top + 7 > bottom -2 or left+7 > right -1:
+                    print("loi")
+                    continue
+                
+                crop = table_image_bin[top+7:bottom-2, left+8:right-1]
+                # cv2.imwrite('./output/image_output/tuan3/'+str(j)+".jpg",crop)
+                cell_text = getTextOfBox(crop)
+                cv2.rectangle(table_image_clone, (left, top), (right, bottom), (0, 0, 255), 2) # draw rectangle
+                cv2.rectangle(table_image_clone, (left+1, top+1), (right-1, bottom-1), (0,255,255), -1) # fill in the rectangle yellow collor
+                if cell_text != "":
+                    
+                    table_image_clone = putTextUTF8(table_image_clone, cell_text, (left+3, top+5), 30) # put text inside the rectangle
+                if cell_text == "":
+                    continue
+                cell_text = re.sub("\n", " ", cell_text)
+                cells.append([left, top, right, bottom, cell_text]) # left, top, right, bottom lan luot la x1, y1, x2, y2
+            
+                # print("cell text: ", point, right, bottom , cell_text)
+                
+                                
+        print("so luong cell: ", len(cells))        
+        curr = 0
+        for j in range(0, len(cells)):
+            if cells[j][3] != curr:
+                if curr != 0:
+                    table_ocr_result += "\n"
+                curr = cells[j][3]
+            
+            cell_text = cells[j][4]
+            if j != len(cells)-1 and cells[j][3] != cells[j+1][3]:
+                table_ocr_result += cell_text
+            else:
+                table_ocr_result += cell_text + " | "
+                                 
+        
+        none_table_image, top, bottom = get_none_table_image(table_image_bin, cells)
+        # get result of nontable 
+        if top != 0 and OCR_all_image(none_table_image[0:top-1,], i) != "" : 
+            table_ocr_result = OCR_all_image(none_table_image[0:top-1,], i) + "\n" + table_ocr_result
+        if bottom + 5 < none_table_image.shape[0] and OCR_all_image(none_table_image[bottom+5:, ], i) != "" :
+            table_ocr_result += "\n" + OCR_all_image(none_table_image[bottom+5:,], i) 
+        
+        f.write(table_ocr_result)
+    cv2.imwrite('./output/image_output/tuan4/result_page' + str(i) + '.jpg', table_image_clone) # save image
     
     # cv2.imshow("table_image: ", table_image)
     # cv2.waitKey(0)
