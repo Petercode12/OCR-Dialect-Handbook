@@ -11,199 +11,21 @@ import math
 import re
 pytesseract.pytesseract.tesseract_cmd = r'C:/Program Files/Tesseract-OCR/tesseract.exe'
 
-class Line():
-    def __init__(self, startx, starty, endx, endy):
-        self.startx = startx
-        self.starty = starty
-        self.endx = endx
-        self.endy = endy
-        
-    def __str__(self):
-        return 'Line:{},{},{},{}'.format(self.startx, self.starty, self.endx, self.endy)
-    def lenx(self):
-        return abs(self.startx - self.endx)
-    
-    def leny(self):
-        return abs(self.starty - self.endy)
-    
-    def toArray(self):
-        return [self.startx, self.starty, self.endx, self.endy]
 
-def reDrawLine(img, aleft, aright, same_len=True):
-    w, h = img.shape[0], img.shape[1]
-    for r in range(w-1):
-        pixel_white = 0
-        start = 0
-        end = 0
-        for c in range(h-1):
-            if img[r,c] == 255:
-                pixel_white += 1
-            if img[r, c] == 0 and img[r,c+1] == 255:
-                start = c
-            if img[r, c] == 255 and img[r,c+1] == 0:
-                end = c
-        if pixel_white > 20:
-            if same_len:
-                img[r,aleft:aright] = 255
-            else:
-                img[r,start:end] = 255
-    return img
-
-def findMinMaxRow(v_img):
-    aleft, aright = 0, 0
-    list_col = []
-    w, h = v_img.shape[0], v_img.shape[1]
-    #print (w,h)
-    for r in range(w-1):
-        pixel_white = 0
-        for c in range(h-1):
-            if v_img[r,c] == 255:
-                pixel_white += 1
-        if pixel_white > 20:
-            list_col.append(r)
-    #print("list_col: ", list_col)
-    if (list_col == []):
-        return 0, 0
-    aleft, aright = min(list_col), max(list_col)
-    return aleft, aright
-
-def getLines(img):
-    lines = []
-    w, h = img.shape[0], img.shape[1]
-    for r in range(w-1):
-        pixel_white = 0
-        startx, starty, endx, endy = 0,0,0,0
-        for c in range(h-1):
-            if img[r,c] == 0 and img[r,c+1] == 255:
-                startx = c
-                starty = r
-            if img[r,c] == 255 and img[r,c+1] == 0:
-                endx = c
-                endy = r
-            if img[r,c] == 255:
-                pixel_white += 1
-        if pixel_white > 20:
-            lines.append(Line(startx,starty,endx,endy))
-            #print(Line(startx,starty,endx,endy).toArray())
-    return lines
-
-def findTable(arr):
-    table = defaultdict(list)
-    for i,b in enumerate(arr):
-        if b[2] < b[3]/2:
-            continue
-        table[str(b[1])].append(b)
-    #print(table)
-    table = [i[1] for i in table.items()]# if len(i[1]) > 1]
-    #print(([len(x) for x in table]))
-    num_cols = max([len(x) for x in table])
-    #print("num_cols:",num_cols)
-    table = [i for i in table if len(i) == num_cols]
-    #print("table rows=", len(table))
-    #print("table cols=",num_cols)
-    print("table size:{}x{}".format(len(table), num_cols))
-    return table
-
-def getTable(src_img, y_start=0, min_w=3, min_h=3):
-    if y_start != 0:
-        src_img = src_img[y_start:,:]
-    if len(src_img.shape) == 2:
-        gray_img = src_img
-    elif len(src_img.shape) ==3:
-        gray_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2GRAY)
-
-    thresh_img = cv2.adaptiveThreshold(~gray_img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, -3)
-    h_img = thresh_img.copy()
-    v_img = thresh_img.copy()
-    scale = 15
-
-    h_size = int(h_img.shape[1]/scale)
-    h_structure = cv2.getStructuringElement(cv2.MORPH_RECT,(h_size,1))
-
-    h_erode_img = cv2.erode(h_img,h_structure,1)
-    h_dilate_img = cv2.dilate(h_erode_img,h_structure,1)
-
-    v_size = int(v_img.shape[0] / scale)
-    v_structure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, v_size))
-    v_erode_img = cv2.erode(v_img, v_structure, 1)
-    v_dilate_img = cv2.dilate(v_erode_img, v_structure, 1)
-
-    
-    aleft, aright = findMinMaxRow(v_dilate_img.T)
-    aleft2, aright2 = findMinMaxRow(h_dilate_img)
-
-    h_dilate_img = reDrawLine(h_dilate_img, aleft, aright, True)
-    #v_dilate_img = reDrawLine(v_dilate_img.T, aleft, aright, False).T
-    #cv2.imshow('h_dilate_img',h_dilate_img)
-    #cv2.imshow('h_dilate_img',v_dilate_img)
-    #cv2.waitKey()
-    #list_hlines = getLines(h_dilate_img)
-    #list_vlines = getLines(v_dilate_img.T)
-    #print(len(list_hlines))
-    #print(len(list_vlines))
-    #for i,_ in list_hlines:
-    #    for j,_ in list_hlines
-    #exit()
-    #v_dilate_img = reDrawLine(v_dilate_img.T, aleft2, aright2, True).T
-    v_dilate_img.T[aleft,aleft2:aright2] = 255
-    v_dilate_img.T[aright,aleft2:aright2] = 255
-    
-    edges = cv2.Canny(h_dilate_img,50,150,apertureSize = 3) 
-    #cv2.imshow("edge", edges)
-    #print("len edges: ", len(edges))
-
-    # This returns an array of r and theta values 
-    lines = cv2.HoughLines(edges, 1, np.pi/180, 200) 
-    #print(len(lines))
-    #cv2.waitKey()
-    mask_img = h_dilate_img + v_dilate_img
-    joints_img = cv2.bitwise_and(h_dilate_img, v_dilate_img)
-    #mask_img = 255 - mask_img
-    #mask_img = unsharp_mask(mask_img)
-    convolution_kernel = np.array(
-                                [[0, 1, 0], 
-                                [1, 2, 1], 
-                                [0, 1, 0]]
-                                )
-
-    #mask_img = cv2.filter2D(mask_img, -1, convolution_kernel)
-    #mask_img = 255- mask_img
-    #cv2.imshow('mask', mask_img)
-    #cv2.imshow('joints_img', joints_img)
-    #cv2.waitKey()
-    # cv2.imshow('join', joints_img)
-    # cv2.waitKey()
-    # fig, ax = plt.subplots(2,2)
-    # fig.suptitle("table detect")
-    # ax[0,0].imshow(h_dilate_img)
-    # ax[0,1].imshow(v_dilate_img)
-    # ax[1,0].imshow(mask_img)
-    # ax[1,1].imshow(joints_img)
-    # plt.show()cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
-    contours, _ = cv2.findContours(mask_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
-    (contours, boundingBoxes) = cont.sort_contours(contours, method="left-to-right")
-    (contours, boundingBoxes) = cont.sort_contours(contours, method="top-to-bottom")
-
-    table = findTable([cv2.boundingRect(x) for x in contours])
-    
-    # for r in table:
-    #     for c in r:
-
-    #         cv2.rectangle(src_img,(c[0], c[1]),(c[0] + c[2], c[1] + c[3]),(0, 0, 255), 1)
-    #         cv2.putText(src_img, , (c[0] + c[2]//2,c[1] + c[3]//2), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0,0,0), 2)
-    # for c in contours:
-    #     x, y, w, h = cv2.boundingRect(c)
-    #     if (w >= min_w and h >= min_h):
-    #         #count += 1
-    #         if count != 0:
-    #             cv2.rectangle(src_img,(x, y),(x + w, y + h),(0, 0, 255), 1)
-    #             list_cells.append([x,y,w,h])
-    #             cv2.putText(src_img, str(count), (x+w//2,y+h//2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 2)
-    #         count += 1
-    #cv2.waitKey()
-    #cv2.imwrite('a.jpg', src_img)
-    return table#mask_img, joints_img
+from pickle import load
+# import tensorflow.compat.v1 as tf  #(it will import tensorflow 1.0 version in your system)
+import tensorflow as tf
+# from tensorflow.keras.models import Model
+from keras.models import load_model
+from keras.utils import to_categorical
+from keras_preprocessing.sequence import pad_sequences
+from keras import backend as K
+#from keras.backend.tensorflow_backend import set_session
+from tensorflow.compat.v1.keras.backend import set_session
+import numpy as np
+import re
+import tensorflow
+from jiwer import wer
 
 # code minh tu day tro di nha
 
@@ -381,8 +203,8 @@ def rotate_img(image, vline): # rotate image based on vertical line
     #print(vline)
     x1, y1, x2, y2 = vline
     img_center = (cols / 2, rows / 2)
-    print("x1, y1, x2, y2: ", x1, y1, x2, y2)
-    print("goc tao thanh voi truc oy: ", np.rad2deg(np.arctan((x1-x2)/(y1-y2))))
+    # print("x1, y1, x2, y2: ", x1, y1, x2, y2)
+    # print("goc tao thanh voi truc oy: ", np.rad2deg(np.arctan((x1-x2)/(y1-y2))))
     # print("goc tao thanh voi truc ox: ", np.rad2deg(np.arctan((y2-y1)/(x2-x1))))
     rotate_matrix = cv2.getRotationMatrix2D(center= img_center, angle= -np.rad2deg(np.arctan((x1-x2)/(y1-y2))), scale=1)
     rotated_image = cv2.warpAffine(src=image, M=rotate_matrix, dsize=(cols, rows), 
@@ -420,12 +242,287 @@ def OCR_all_image(image, i):  #OCR on non table image
     return text
 
 inputDir = 'input/'
-outputDir = 'output/image_output/tuan4/'
+outputDir = 'output/image_output/tuan5/'
 
 
+####################################
+#######Start Correction model#######
+####################################
+Filename = "bana_raw_dataset.txt"
+dict = {}
+threshold = 5
+# load doc into memory
+def load_data(filename):
+	# open the file as read only
+	file = open(filename, 'r', encoding='utf-8')
+	# read all text
+	text = file.read()
+	# close the file
+	file.close()
+	return text
+two_char = ['c̆', 'ĕ', 'ĭ', 'ŏ', 'ơ̆', 'ŭ', 'ư̆', 'C̆', 'Ĕ', 'Ĭ', 'Ŏ', 'Ơ̆', 'Ŭ', 'Ư̆']
+three_char = ['ĕ̂', 'ŏ̂', 'Ĕ̂', 'Ŏ̂']
+CHAR_REPLACE = "a b c d e f g h i j k l m n o p q r s t u v w y z A B C D E F G H I J K L M N O P Q R S T U V ạ ả ã à á â ậ ầ ấ ẩ ẫ ă ắ ằ ặ ẳ ẵ ó ò ọ õ ỏ ô ộ ổ ỗ ồ ố ơ ờ ớ ợ ở ỡ é è ẻ ẹ ẽ ê ế ề ệ ể ễ ú ù ụ ủ ũ ư ự ữ ử ừ ứ í ì ị ỉ ĩ ý ỳ ỷ ỵ ỹ đ Ạ Ả Ã À Á Â Ậ Ầ Ấ Ẩ Ẫ Ă Ắ Ằ Ặ Ẳ Ẵ Ó Ò Ọ Õ Ỏ Ô Ộ Ổ Ỗ Ồ Ố Ơ Ờ Ớ Ợ Ở Ỡ É È Ẻ Ẹ Ẽ Ê Ế Ề Ệ Ể Ễ Ú Ù Ụ Ủ Ũ Ư Ự Ữ Ử Ừ Ứ Í Ì Ị Ỉ Ĩ Ý Ỳ Ỷ Ỵ Ỹ Đ a ă â b ƀ c̆ d đ e ĕ ê ĕ̂ g h i ĭ j k l m n ñ o ŏ ô ŏ̂ ơ ơ̆ p r s t u ŭ ư ư̆ w y f q v z A Ă Â B Ƀ C̆ D Đ E Ĕ Ê Ĕ̂ G H I Ĭ J K L M N Ñ O Ŏ Ô Ŏ̂ Ơ Ơ̆ P R S T U Ŭ Ư Ư̆ W Y F Q V Z"
+char = CHAR_REPLACE.split(' ')
+char_skip = ['"', '”', '(', ')', '_', ',', ';', ':', '.', '/', '\n',' ','>','<']
+char_delete = ['@','#','$', '%', '|', '&', '*', '^', "'", "¬", "Œ", "ˆ", "£"]
+def split_word(text):
+    # result = re.split(r'[\s/()“”]', text)
+    word_list = []
+    space_list = []
+    space_first = -1
+    i = 0
+    n = len(text)
+    current_word = ""
+    current_space = ""
+    
+    while i < n:
+        if text[i] in char_delete:
+            i+=1
+            continue
+        if text[i] in char_skip:
+            if space_first == -1:
+                space_first = True
+            if current_word != "":
+                word_list.append(current_word)
+                current_word = ""
+            current_space += text[i]
+        else:
+            if space_first == -1:
+                space_first = False
+            if current_space != "":
+                space_list.append(current_space)
+                current_space = ""
+            current_word += text[i]
+        i += 1
+    if current_word != "":
+        word_list.append(current_word)
+        current_word = ""
+    if current_space != "":
+        space_list.append(current_space)
+        current_space = ""
+    # print(word_list, space_list)
+    return word_list, space_list, space_first
+# print(split_word("đẩy (ra/vào) [a"))
+def split_character(text):
+    result = []
+    n = len(text)
+    i = 0
+    while (i < n):
+        check = False
+        for j in three_char:
+            if i+2 < len(text) and text[i] + text[i+1] + text[i+2] == j:
+                result.append(j)
+                i = i+3
+                check = True
+                break
+        for j in two_char:
+            
+            if i+1 < len(text) and text[i] + text[i+1] == j:
+                # print(j)
+                result.append(j)
+                i = i+2
+                check = True
+                break
+        if not check:
+            result.append(text[i])
+            i = i+1
+    return result
 
-for i in range(1,2):
-    ############### code tuan 3 #################3
+def text_cleaner(text):
+    result = re.sub('[,_“”();:.]',"", text) # TH thay thế là dấu , ' , "", ( )
+    result = re.split('\s', result)
+    # result = split_word(text)[0] 
+    # temp_result = []
+    for i in result:
+        if len(i) <= 1:
+            result.remove(i)
+            continue
+        
+    for temp in result:
+        i = split_character(temp)
+        n = len(i)
+        # print("length: ", n)
+        for j in range(0, len(i)-1):
+        
+            temp = i[j]+i[j+1]
+            if (temp, n) in dict.keys():
+                dict[(temp, n)] += 1
+            else: 
+                dict[(temp, n)] = 1
+        for j in range(0, len(i)-2):
+            temp = i[j]+i[j+1]+i[j+2]
+            if (temp, n) in dict.keys():
+                dict[(temp, n)] += 1
+            else: 
+                dict[(temp, n)] = 1
+        for j in range(0, len(i)-3):
+            temp = i[j]+i[j+1]+i[j+2]+i[j+3]
+            if (temp, n) in dict.keys():
+                dict[(temp, n)] += 1
+            else: 
+                dict[(temp, n)] = 1
+        for j in range(0, len(i)-4):
+            temp = i[j]+i[j+1]+i[j+2]+i[j+3]+i[j+4]
+            if (temp, n) in dict.keys():
+                dict[(temp, n)] += 1
+            else: 
+                dict[(temp, n)] = 1
+
+def findreplacement(text, n):
+    
+    result = 0
+    current = None
+    char_list = split_character(text)
+    for i in range(len(char_list)): # duyet tren substring bi sai
+        for j in char: # j la kí tự để thay thế
+            pre_substr = ""
+            after_substr = ""
+            for l in range(0,i):
+                pre_substr += char_list[l]
+            for l in range(i+1,len(char_list)):
+                after_substr += char_list[l]
+            temp = pre_substr + j + after_substr
+            if (temp, n) in dict and dict[(temp, n)] >= threshold and dict[(temp, n)] >= result:
+                result = dict[(temp, n)]
+                current = temp
+    # print("Thay thế: ", text, n, current)
+    return current # current là từ có xác xuất đúng cao nhất               
+def correction(text): # phiên bản hiện tại correct được cho cả câu.
+    char_list_raw = split_character(text)
+    # print(char_list_raw)
+    char_list = []
+    char_list_position = []
+    for i in char_list_raw:
+        if i in char_delete:
+            char_list_raw.remove(i)
+    for i in range(len(char_list_raw)):
+        if char_list_raw[i] == ']' :
+            char_list_raw[i] = 'l'
+        if char_list_raw[i] == 'š':
+            char_list_raw[i] = 'c̆'
+        if char_list_raw[i] == '“':
+            char_list_raw[i] = '‘'
+            # print("YES")    
+        if char_list_raw[i] not in char_skip:
+            char_list.append(char_list_raw[i])
+            char_list_position.append(i)
+    length = len(char_list_raw)
+    # print(char_list)
+    for i in range(len(char_list)):
+        for j in reversed(range(2, 6)):
+            if i+j > len(char_list):
+                continue
+            substr = ""
+            for k in range(0, j):
+                substr = substr + char_list[i+k]
+            n = len(char_list)
+            # print(i, j, substr, n)
+            if (substr, n) not in dict or dict[(substr, n)] < threshold: 
+                # print("Bi sai: ", substr)
+                sub_result = findreplacement(substr, len(char_list))
+                if(not sub_result):
+                    continue
+                pre_substr = ""
+                after_substr = ""
+                for l in range(0,i):
+                    char_list_raw[char_list_position[l]] = char_list[l] 
+                    
+                for m in range(0, char_list_position[i]):
+                    pre_substr += char_list_raw[m]    
+                
+                for l in range(i+j,len(char_list)):
+                    char_list_raw[char_list_position[l]] = char_list[l] 
+                    
+                for m in range(char_list_position[i+j-1]+1, length):
+                    after_substr += char_list_raw[m]
+                
+                result = pre_substr + sub_result + after_substr
+                # print("Start: ", i, " ; End: ", i+j-1)
+                return result
+            else:
+                # print(substr, dict[(substr, len(char_list))])
+                break
+    result = ""
+    for i in char_list_raw:
+        result += i
+    return result
+def correct_manytime(text):
+    length = math.ceil(len(text)/2)
+    result = text
+    while length > 0:
+        result = correction(result)
+        length -= 1
+    return result
+def correction_sentence(text):
+    final_result = ""
+    split = split_word(text)
+    word_list = split[0]
+    space_list = split[1]
+    space_first = split[2]
+    for word in word_list: # tách từ từ câu
+        if word == "" or word in char_delete:
+            word_list.remove(word)
+    cnt = 0
+    if space_first and cnt < len(space_list):
+        final_result += space_list[cnt]
+        cnt += 1
+    for i in word_list:
+        # print(i, cnt)
+        if i in dict and dict[i] >= threshold:
+            if final_result == "":
+                final_result = i
+                if cnt < len(space_list):
+                    final_result += space_list[cnt]
+                cnt+=1
+                continue
+            else:
+                final_result = final_result + i
+                if cnt < len(space_list):
+                    final_result += space_list[cnt]
+                cnt+=1
+                continue
+        if final_result == "":
+            final_result = correct_manytime(i)
+            if cnt < len(space_list):
+                final_result += space_list[cnt]
+        else:
+            final_result = final_result + correct_manytime(i)
+            if cnt < len(space_list):
+                final_result += space_list[cnt]
+        cnt+=1
+    while cnt < len(space_list):
+        final_result += space_list[cnt]
+        cnt += 1
+    return final_result
+raw_text = load_data(Filename)
+text_cleaner(raw_text)
+
+test = "kơkăš"
+test1 = "šư bar"
+test2 = "BAHNAR"
+test3 = "Pore \n(Cách “phót” âm)"
+test4 = "đẩy (ra/và]) [a"
+test5 = "(CHỮ CÁD"
+test6 = "| tên riêng: Sram  "
+test7 = "trong><ngoài"
+test8 = "“mtẽ"
+# print(test[3:5])
+
+# print(correction_sentence("b) Đối với các phụ âm không bao giờ đi liền với nhau thì giữa chúng phải có nguyên âm “ơ”."))
+# print(correction_sentence(test1))
+# print(correction_sentence(test2))
+# print(correction_sentence(test3))
+# print(correction_sentence(test4))
+# print(correction_sentence(test5))
+# print(correction_sentence(test6))
+print(correction_sentence(test8))
+####################
+####################
+####################
+
+for i in range(1,116):
+    ############### code tuan 6 #################3
     print("Image ", i)
     table_image  = cv2.imread('./input/crop_page'+ str(i) +'.jpg') # get image
     
@@ -475,13 +572,11 @@ for i in range(1,2):
                 
     cells = []
     j = 0
-    imgPath = 'non_table_result' + str(i) + '.jpg'
+    imgPath = 'table_result' + str(i) + '.jpg'
     table_ocr_result = ""
     with open(outputDir + imgPath[imgPath.rfind('/') + 1:-3] + 'txt', 'w', encoding='utf-8') as f:
         
         for point in points: # loop in points to find cells
-            
-                
             j = j + 1
             
             left, top = point
@@ -500,6 +595,15 @@ for i in range(1,2):
                 crop = table_image_bin[top+7:bottom-2, left+8:right-1]
                 # cv2.imwrite('./output/image_output/tuan3/'+str(j)+".jpg",crop)
                 cell_text = getTextOfBox(crop)
+                # print("Raw text: ",cell_text)
+                # cell_text = correction(cell_text)
+                try:
+                    print("Pre: ", cell_text, " ; After: ", correction_sentence(cell_text))
+                    cell_text = correction_sentence(cell_text)
+                except Exception as e:
+                    print(e)
+                    pass 
+                    
                 cv2.rectangle(table_image_clone, (left, top), (right, bottom), (0, 0, 255), 2) # draw rectangle
                 cv2.rectangle(table_image_clone, (left+1, top+1), (right-1, bottom-1), (0,255,255), -1) # fill in the rectangle yellow collor
                 if cell_text != "":
@@ -530,13 +634,28 @@ for i in range(1,2):
         
         none_table_image, top, bottom = get_none_table_image(table_image_bin, cells)
         # get result of nontable 
-        if top != 0 and OCR_all_image(none_table_image[0:top-1,], i) != "" : 
-            table_ocr_result = OCR_all_image(none_table_image[0:top-1,], i) + "\n" + table_ocr_result
-        if bottom + 5 < none_table_image.shape[0] and OCR_all_image(none_table_image[bottom+5:, ], i) != "" :
-            table_ocr_result += "\n" + OCR_all_image(none_table_image[bottom+5:,], i) 
+        cell_text= OCR_all_image(none_table_image[0:top-1,], i)
+        if top != 0 and cell_text != "" :
+            print("Pre top: ", cell_text, "\nAfter top: ", correction_sentence(cell_text))
+            cell_text = correction_sentence(cell_text)
+            # try:
+            #     cell_text = self_correction(OCR_all_image(none_table_image[0:top-1,], i))
+            # except Exception as e:
+            #     print("head: ", e)
+            table_ocr_result = cell_text + "\n" + table_ocr_result
+        cell_text = OCR_all_image(none_table_image[bottom+5:, ], i)
+        if bottom + 5 < none_table_image.shape[0] and cell_text != "" :
+            print("Pre bottom: ", cell_text, "\nAfter bottom: ", correction_sentence(cell_text))
+            cell_text = correction_sentence(cell_text)
+            # try:
+            #     cell_text = self_correction(cell_text)
+            # except Exception as e:
+            #     print("tail: ", e)
+            #     pass
+            table_ocr_result += "\n" + cell_text 
         
         f.write(table_ocr_result)
-    cv2.imwrite('./output/image_output/tuan4/result_page' + str(i) + '.jpg', table_image_clone) # save image
+    # cv2.imwrite('./output/image_output/tuan5/result_page' + str(i) + '.jpg', table_image_clone) # save image
     
     # cv2.imshow("table_image: ", table_image)
     # cv2.waitKey(0)
