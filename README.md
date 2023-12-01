@@ -9,4 +9,4 @@ python detecttable.py
 + **detected:**  
 ![alt text](detect.jpg)  
 + **extract data:**  
-![alt text](recog.jpg)  
+![alt text](recog.png)  
